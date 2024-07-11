@@ -1,0 +1,252 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>하나고등학교 주변 병원 안내</title>
+    <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css" />
+    <style>
+        body {
+            font-family: 'Nanum Gothic', sans-serif;
+            background-color: #f9f9f9;
+            margin: 0;
+            padding: 0;
+        }
+        header {
+            background: linear-gradient(to bottom, #2db400, #fff);
+            color: white;
+            padding: 20px;
+            text-align: center;
+            position: relative;
+        }
+        header h1 {
+            margin: 0;
+        }
+        header h1 span {
+            color: #2db400;
+        }
+        #map {
+            height: 500px;
+            width: 100%;
+        }
+        #info {
+            margin: 20px;
+            padding: 20px;
+            background-color: white;
+            border: 1px solid #e0e0e0;
+            border-radius: 5px;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+            display: none;
+        }
+        .hospital-info {
+            margin-bottom: 10px;
+        }
+        .hospital-info h2 {
+            color: #2db400;
+        }
+        .floating-buttons {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            z-index: 1000;
+        }
+        .floating-buttons button {
+            background-color: #2db400;
+            color: white;
+            border: none;
+            border-radius: 50%;
+            padding: 10px 15px;
+            margin: 5px;
+            cursor: pointer;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+        }
+        #form, #medicineForm {
+            display: none;
+            margin: 20px;
+            padding: 20px;
+            background-color: white;
+            border: 1px solid #e0e0e0;
+            border-radius: 5px;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+        }
+    </style>
+</head>
+<body>
+    <header>
+        <h1><span>HANA</span>MED.INFO</h1>
+    </header>
+    <div id="map"></div>
+    <div id="info"></div>
+
+    <div id="medicineForm">
+        <h2>약 정보 입력</h2>
+        <form id="medForm">
+            <label for="medName">약 이름:</label><br>
+            <input type="text" id="medName" name="medName"><br>
+            <label for="medEffect">효과:</label><br>
+            <input type="text" id="medEffect" name="medEffect"><br>
+            <label for="medSideEffect">부작용:</label><br>
+            <input type="text" id="medSideEffect" name="medSideEffect"><br>
+            <label for="medUsage">복용 방법:</label><br>
+            <input type="text" id="medUsage" name="medUsage"><br>
+            <input type="submit" value="추가">
+        </form>
+    </div>
+
+    <div id="form">
+        <h2>병원 정보 입력</h2>
+        <form id="hospitalForm">
+            <label for="name">병원 이름:</label><br>
+            <input type="text" id="name" name="name"><br>
+            <label for="lat">위도:</label><br>
+            <input type="text" id="lat" name="lat"><br>
+            <label for="lng">경도:</label><br>
+            <input type="text" id="lng" name="lng"><br>
+            <label for="transport">교통편:</label><br>
+            <input type="text" id="transport" name="transport"><br>
+            <label for="medicines">처방약:</label><br>
+            <div id="medicineCheckboxes"></div>
+            <input type="submit" value="추가">
+        </form>
+    </div>
+
+    <div class="floating-buttons">
+        <button onclick="toggleForm('form')">병원 추가</button>
+        <button onclick="toggleForm('medicineForm')">약 추가</button>
+    </div>
+
+    <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
+    <script>
+        const map = L.map('map').setView([37.647151, 126.936686], 13);
+
+        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+            attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+        }).addTo(map);
+
+        const schoolPosition = [37.647151, 126.936686];
+        const schoolMarker = L.marker(schoolPosition, {icon: L.icon({
+            iconUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-icon.png',
+            iconSize: [25, 41],
+            iconAnchor: [12, 41],
+            popupAnchor: [1, -34],
+            shadowSize: [41, 41],
+            iconUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-icon-2x.png' // 다른 색깔의 핀 이미지
+        })}).addTo(map).bindPopup('하나고등학교').openPopup();
+
+        let hospitals = JSON.parse(localStorage.getItem('hospitals')) || [
+            {
+                name: '병원 A',
+                position: [37.561, 126.982],
+                transport: '버스 123번, 지하철 2호선',
+                prescriptions: [
+                    {name: '약 A', effect: '두통 완화', sideEffect: '졸음 유발'},
+                    {name: '약 B', effect: '소화 촉진', sideEffect: '위장 장애'}
+                ]
+            },
+            {
+                name: '병원 B',
+                position: [37.565, 126.976],
+                transport: '버스 456번, 지하철 4호선',
+                prescriptions: [
+                    {name: '약 C', effect: '근육 통증 완화', sideEffect: '어지럼증'}
+                ]
+            }
+        ];
+
+        let medicines = JSON.parse(localStorage.getItem('medicines')) || [];
+
+        function renderMedicineCheckboxes() {
+            const container = document.getElementById('medicineCheckboxes');
+            container.innerHTML = '';
+            medicines.forEach((medicine, index) => {
+                const checkbox = document.createElement('input');
+                checkbox.type = 'checkbox';
+                checkbox.id = `med-${index}`;
+                checkbox.value = index;
+                container.appendChild(checkbox);
+                const label = document.createElement('label');
+                label.htmlFor = `med-${index}`;
+                label.textContent = `${medicine.name} (효과: ${medicine.effect}, 부작용: ${medicine.sideEffect}, 복용 방법: ${medicine.usage})`;
+                container.appendChild(label);
+                container.appendChild(document.createElement('br'));
+            });
+        }
+
+        function saveToLocalStorage() {
+            localStorage.setItem('hospitals', JSON.stringify(hospitals));
+            localStorage.setItem('medicines', JSON.stringify(medicines));
+        }
+
+        hospitals.forEach(hospital => {
+            const marker = L.marker(hospital.position).addTo(map)
+                .bindPopup(`<b>${hospital.name}</b><br>교통편: ${hospital.transport}`).openPopup();
+
+            marker.on('click', () => {
+                showHospitalInfo(hospital);
+            });
+        });
+
+        function showHospitalInfo(hospital) {
+            const infoDiv = document.getElementById('info');
+            let prescriptionsHTML = hospital.prescriptions.map(p => `
+                <div class="hospital-info">
+                    <h2>${p.name}</h2>
+                    <p><strong>효과:</strong> ${p.effect}</p>
+                    <p><strong>부작용:</strong> ${p.sideEffect}</p>
+                </div>
+            `).join('');
+
+            infoDiv.innerHTML = `<h2>${hospital.name}</h2>
+                                 <p><strong>교통편 정보:</strong> ${hospital.transport}</p>
+                                 ${prescriptionsHTML}`;
+            infoDiv.style.display = 'block';
+        }
+
+        function toggleForm(formId) {
+            const form = document.getElementById(formId);
+            form.style.display = form.style.display === 'none' ? 'block' : 'none';
+        }
+
+        document.getElementById('medForm').addEventListener('submit', function(event) {
+            event.preventDefault();
+            const name = document.getElementById('medName').value;
+            const effect = document.getElementById('medEffect').value;
+            const sideEffect = document.getElementById('medSideEffect').value;
+            const usage = document.getElementById('medUsage').value;
+            const newMedicine = { name, effect, sideEffect, usage };
+            medicines.push(newMedicine);
+            renderMedicineCheckboxes();
+            saveToLocalStorage();
+            document.getElementById('medForm').reset();
+            toggleForm('medicineForm');
+        });
+
+        document.getElementById('hospitalForm').addEventListener('submit', function(event) {
+            event.preventDefault();
+            const name = document.getElementById('name').value;
+            const lat = parseFloat(document.getElementById('lat').value);
+            const lng = parseFloat(document.getElementById('lng').value);
+            const transport = document.getElementById('transport').value;
+            const selectedMedicineIndexes = Array.from(document.querySelectorAll('#medicineCheckboxes input:checked')).map(input => parseInt(input.value));
+            const prescriptions = selectedMedicineIndexes.map(index => medicines[index]);
+
+            const newHospital = { name, position: [lat, lng], transport, prescriptions };
+
+            hospitals.push(newHospital);
+
+            const marker = L.marker(newHospital.position).addTo(map)
+                .bindPopup(`<b>${newHospital.name}</b><br>교통편: ${newHospital.transport}`).openPopup();
+
+            marker.on('click', () => {
+                showHospitalInfo(newHospital);
+            });
+
+            saveToLocalStorage();
+            document.getElementById('hospitalForm').reset();
+            toggleForm('form');
+        });
+
+        renderMedicineCheckboxes();
+    </script>
+</body>
+</html>
