@@ -14,15 +14,17 @@
             color: #333;
         }
         header {
-            background: linear-gradient(to bottom, #2db400, rgba(255, 255, 255, 0));
+            background: linear-gradient(to bottom, #ccc, rgba(255, 255, 255, 0));
             color: #333;
             padding: 20px;
-            text-align: center;
             position: relative;
         }
         header h1 {
             margin: 0;
             color: #2db400;
+            position: absolute;
+            top: 10px;
+            left: 20px;
         }
         #map {
             height: 500px;
@@ -36,6 +38,7 @@
             border-radius: 5px;
             box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
             display: none;
+            position: relative;
         }
         .hospital-info {
             margin-bottom: 10px;
@@ -43,11 +46,21 @@
         .hospital-info h2 {
             color: #2db400;
         }
+        .delete-btn {
+            position: absolute;
+            top: 10px;
+            right: 10px;
+            color: gray;
+            cursor: pointer;
+        }
         .floating-buttons {
             position: fixed;
             top: 20px;
             right: 20px;
             z-index: 1000;
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
         }
         .floating-buttons button {
             background-color: #2db400;
@@ -59,7 +72,7 @@
             cursor: pointer;
             box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
         }
-        #form, #medicineForm, #deleteForm {
+        #form, #medicineForm, #medicineList {
             display: none;
             margin: 20px;
             padding: 20px;
@@ -109,26 +122,15 @@
         </form>
     </div>
 
-    <div id="deleteForm">
-        <h2>정보 삭제</h2>
-        <form id="deleteHospitalForm">
-            <label for="deleteHospital">병원 삭제:</label><br>
-            <input type="text" id="deleteHospital" name="deleteHospital"><br>
-            <input type="password" id="deletePassword" name="deletePassword" placeholder="비밀번호 입력"><br>
-            <input type="submit" value="삭제">
-        </form>
-        <form id="deleteMedicineForm">
-            <label for="deleteMedicine">약 삭제:</label><br>
-            <input type="text" id="deleteMedicine" name="deleteMedicine"><br>
-            <input type="password" id="deleteMedPassword" name="deleteMedPassword" placeholder="비밀번호 입력"><br>
-            <input type="submit" value="삭제">
-        </form>
+    <div id="medicineList">
+        <h2>약 정보 목록</h2>
+        <ul id="medicineListItems"></ul>
     </div>
 
     <div class="floating-buttons">
         <button onclick="toggleForm('form')">병원 추가</button>
         <button onclick="toggleForm('medicineForm')">약 추가</button>
-        <button onclick="toggleForm('deleteForm')">삭제</button>
+        <button onclick="toggleForm('medicineList')">약 정보</button>
     </div>
 
     <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
@@ -187,6 +189,33 @@
             });
         }
 
+        function renderMedicineList() {
+            const list = document.getElementById('medicineListItems');
+            list.innerHTML = '';
+            medicines.forEach((medicine, index) => {
+                const li = document.createElement('li');
+                li.textContent = `${medicine.name} (효과: ${medicine.effect}, 부작용: ${medicine.sideEffect}, 복용 방법: ${medicine.usage})`;
+                const deleteBtn = document.createElement('button');
+                deleteBtn.textContent = '삭제';
+                deleteBtn.style.marginLeft = '10px';
+                deleteBtn.onclick = () => deleteMedicine(index);
+                li.appendChild(deleteBtn);
+                list.appendChild(li);
+            });
+        }
+
+        function deleteMedicine(index) {
+            const password = prompt('비밀번호를 입력하세요:');
+            if (password === '1234') {
+                medicines.splice(index, 1);
+                saveToLocalStorage();
+                renderMedicineCheckboxes();
+                renderMedicineList();
+            } else {
+                alert('비밀번호가 틀렸습니다.');
+            }
+        }
+
         function saveToLocalStorage() {
             localStorage.setItem('hospitals', JSON.stringify(hospitals));
             localStorage.setItem('medicines', JSON.stringify(medicines));
@@ -213,8 +242,20 @@
 
             infoDiv.innerHTML = `<h2>${hospital.name}</h2>
                                  <p><strong>교통편 정보:</strong> ${hospital.transport}</p>
-                                 ${prescriptionsHTML}`;
+                                 ${prescriptionsHTML}
+                                 <span class="delete-btn" onclick="deleteHospital('${hospital.name}')">삭제</span>`;
             infoDiv.style.display = 'block';
+        }
+
+        function deleteHospital(name) {
+            const password = prompt('비밀번호를 입력하세요:');
+            if (password === '1234') {
+                hospitals = hospitals.filter(hospital => hospital.name !== name);
+                saveToLocalStorage();
+                location.reload(); // 페이지를 새로고침하여 삭제 반영
+            } else {
+                alert('비밀번호가 틀렸습니다.');
+            }
         }
 
         function toggleForm(formId) {
@@ -261,33 +302,8 @@
             toggleForm('form');
         });
 
-        document.getElementById('deleteHospitalForm').addEventListener('submit', function(event) {
-            event.preventDefault();
-            const name = document.getElementById('deleteHospital').value;
-            const password = document.getElementById('deletePassword').value;
-            if (password === '1234') {
-                hospitals = hospitals.filter(hospital => hospital.name !== name);
-                saveToLocalStorage();
-                location.reload(); // 페이지를 새로고침하여 삭제 반영
-            } else {
-                alert('비밀번호가 틀렸습니다.');
-            }
-        });
-
-        document.getElementById('deleteMedicineForm').addEventListener('submit', function(event) {
-            event.preventDefault();
-            const name = document.getElementById('deleteMedicine').value;
-            const password = document.getElementById('deleteMedPassword').value;
-            if (password === '1234') {
-                medicines = medicines.filter(medicine => medicine.name !== name);
-                saveToLocalStorage();
-                renderMedicineCheckboxes(); // 삭제 후 체크박스 재렌더링
-            } else {
-                alert('비밀번호가 틀렸습니다.');
-            }
-        });
-
         renderMedicineCheckboxes();
+        renderMedicineList();
     </script>
 </body>
 </html>
